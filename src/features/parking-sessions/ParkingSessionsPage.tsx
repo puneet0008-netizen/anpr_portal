@@ -1,9 +1,9 @@
 import { useState } from 'react'
+import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { LogIn, LogOut, Clock, Car, Search, RefreshCw, User, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { PageHeader }  from '@/components/shared/PageHeader'
 import { DataTable, type Column } from '@/components/shared/DataTable'
-import { StatusBadge }  from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -14,6 +14,15 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime } from '@/lib/utils'
 import * as parkingApi from '@/api/parking.api'
 import type { ParkingSession } from '@/types'
+
+const isSessionIn = (s: ParkingSession) => s.status === 'active' || !s.exitTime
+
+const SessionInOutBadge = ({ session }: { session: ParkingSession }) =>
+  isSessionIn(session) ? (
+    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">IN</span>
+  ) : (
+    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">OUT</span>
+  )
 
 // ─── Entry modal ──────────────────────────────────────────────────────────────
 const EntryModal = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
@@ -261,6 +270,10 @@ const ActiveSessionsTable = () => {
       ),
     },
     {
+      header: 'Status',
+      accessor: (r) => <SessionInOutBadge session={r} />,
+    },
+    {
       header: 'Action',
       accessor: (r) => (
         <Button
@@ -294,7 +307,7 @@ const ActiveSessionsTable = () => {
 const AllSessionsTable = () => {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<string>('')
-  const { data, isLoading } = useSessions({
+  const { data, isLoading, refetch, isFetching } = useSessions({
     numberPlate: search || undefined,
     status: status || undefined,
     limit: 50,
@@ -332,7 +345,10 @@ const AllSessionsTable = () => {
         <span className="font-mono text-xs">{r.durationFormatted ?? '—'}</span>
       ),
     },
-    { header: 'Status', accessor: (r) => <StatusBadge status={r.status} /> },
+    {
+      header: 'Status',
+      accessor: (r) => <SessionInOutBadge session={r} />,
+    },
   ]
 
   return (
@@ -353,9 +369,19 @@ const AllSessionsTable = () => {
           onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
+          <option value="active">IN</option>
+          <option value="completed">OUT</option>
         </select>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto text-xs gap-1.5"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
+        </Button>
       </div>
       <DataTable columns={columns} data={data?.data ?? []} loading={isLoading} keyExtractor={(r) => r.id} />
     </>
@@ -366,6 +392,12 @@ const AllSessionsTable = () => {
 const ParkingSessionsPage = () => {
   const [entryOpen, setEntryOpen] = useState(false)
   const [exitOpen,  setExitOpen]  = useState(false)
+  const qc = useQueryClient()
+  const isRefreshing = useIsFetching({ queryKey: ['parking-sessions'] }) > 0
+
+  const handleRefresh = () => {
+    qc.invalidateQueries({ queryKey: ['parking-sessions'] })
+  }
 
   return (
     <div>
@@ -374,6 +406,15 @@ const ParkingSessionsPage = () => {
         subtitle="Track vehicle entry and exit times with duration"
         action={
           <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
             <Button
               size="sm"
               variant="outline"
