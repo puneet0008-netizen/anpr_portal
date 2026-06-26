@@ -50,7 +50,8 @@ api.interceptors.response.use(
     }
 
     const msg = (error.response?.data as { message?: string })?.message ?? 'Something went wrong'
-    if (error.response?.status !== 401) toast.error(msg)
+    const silent = (original as typeof original & { silent?: boolean })?.silent
+    if (error.response?.status !== 401 && !silent) toast.error(msg)
     return Promise.reject(error)
   }
 )

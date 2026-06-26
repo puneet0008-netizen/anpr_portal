@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, X, Building, Phone, Mail, MapPin, Calendar, FileText, Boxes } from 'lucide-react'
+import { Plus, X, Eye, Trash2, Building, Phone, Mail, MapPin, Calendar, FileText, Boxes } from 'lucide-react'
+import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -43,6 +44,8 @@ const schema = z.object({
   password:          z.string().min(6, 'Min 6 characters').optional().or(z.literal('')),
 })
 type FormData = z.infer<typeof schema>
+
+const vendorId = (v: Vendor & { _id?: string }) => v.id || v._id || ''
 
 // ─── Vendor Form ──────────────────────────────────────────────────────────────
 const VendorForm = ({ initial, onSubmit, loading, onCancel }: {
@@ -155,14 +158,34 @@ const VendorForm = ({ initial, onSubmit, loading, onCancel }: {
 }
 
 // ─── Vendor Detail Panel ──────────────────────────────────────────────────────
-const VendorDetailPanel = ({ vendorId, onClose }: { vendorId: string; onClose: () => void }) => {
-  const { data, isLoading } = useVendorDetail(vendorId)
+const VendorDetailPanel = ({ vendor, onClose, onDelete }: {
+  vendor: Vendor
+  onClose: () => void
+  onDelete?: () => void
+}) => {
+  const id = vendorId(vendor)
+  const { data: detail, isLoading: detailLoading } = useVendorDetail(id)
   const updateMut = useUpdateVendor()
   const [editing, setEditing] = useState(false)
 
-  const toDateInput = (s?: string) => s ? s.slice(0, 10) : ''
+  // List row opens instantly; detail API enriches GSTIN, address, etc.
+  const data: VendorDetail = {
+    gstin: '',
+    registeredAddress: '',
+    primaryService: 'Other',
+    contractStartDate: '',
+    assignedParkingSites: [],
+    cameraIds: [],
+    contractDocuments: [],
+    ...vendor,
+    ...detail,
+    id,
+  }
 
-  const editInitial = data ? {
+  const toDateInput = (s?: string) => s ? s.slice(0, 10) : ''
+  const field = (value?: string | null) => value || '—'
+
+  const editInitial = {
     vendorName:        data.vendorName,
     contactPerson:     data.contactPerson,
     phone:             data.phone,
@@ -175,30 +198,25 @@ const VendorDetailPanel = ({ vendorId, onClose }: { vendorId: string; onClose: (
     contractStartDate: toDateInput(data.contractStartDate),
     notes:             data.notes ?? '',
     assignedSiteId:    data.assignedSiteId ?? '',
-  } : undefined
+  }
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-[480px] bg-white shadow-2xl border-l border-gray-200 flex flex-col">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <h2 className="font-semibold text-gray-900">{editing ? 'Edit Vendor' : 'Vendor Detail'}</h2>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+        <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
           <X className="h-4 w-4" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5">
-        {isLoading ? (
-          <div className="space-y-3 animate-pulse">
-            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
-          </div>
-        ) : data ? (
-          editing ? (
+        {editing ? (
             <VendorForm
-              key={data.updatedAt ?? vendorId}
+              key={data.updatedAt ?? id}
               initial={editInitial}
               loading={updateMut.isPending}
               onCancel={() => setEditing(false)}
-              onSubmit={(d) => updateMut.mutate({ id: data.id, data: d as CreateVendorDto }, { onSuccess: () => setEditing(false) })}
+              onSubmit={(d) => updateMut.mutate({ id, data: d as CreateVendorDto }, { onSuccess: () => setEditing(false) })}
             />
           ) : (
           <div className="space-y-5">
@@ -211,14 +229,32 @@ const VendorDetailPanel = ({ vendorId, onClose }: { vendorId: string; onClose: (
                     {data.status}
                   </span>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
+                  {onDelete && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      onClick={onDelete}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="space-y-2 text-sm text-gray-700">
-                <div className="flex items-center gap-2"><Building className="h-4 w-4 text-gray-400" /> {data.primaryService}</div>
-                <div className="flex items-center gap-2"><Phone   className="h-4 w-4 text-gray-400" /> {data.phone}</div>
-                <div className="flex items-center gap-2"><Mail    className="h-4 w-4 text-gray-400" /> {data.email}</div>
-                <div className="flex items-center gap-2"><MapPin  className="h-4 w-4 text-gray-400" /> {data.city}, {data.state}</div>
-                <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-gray-400" /> Contract since {formatDate(data.contractStartDate)}</div>
+                <div className="flex items-center gap-2"><Building className="h-4 w-4 text-gray-400" /> {field(data.primaryService)}</div>
+                <div className="flex items-center gap-2"><Phone   className="h-4 w-4 text-gray-400" /> {field(data.phone)}</div>
+                <div className="flex items-center gap-2"><Mail    className="h-4 w-4 text-gray-400" /> {field(data.email)}</div>
+                <div className="flex items-center gap-2"><MapPin  className="h-4 w-4 text-gray-400" /> {field(data.city)}{data.state ? `, ${data.state}` : ''}</div>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  {data.contractStartDate
+                    ? <>Contract since {formatDate(data.contractStartDate)}</>
+                    : detailLoading ? 'Loading contract date…' : 'Contract date —'}
+                </div>
               </div>
             </div>
 
@@ -227,14 +263,21 @@ const VendorDetailPanel = ({ vendorId, onClose }: { vendorId: string; onClose: (
             {/* Business Info */}
             <div>
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Business Info</h4>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">GSTIN</span>
-                  <span className="font-mono text-gray-700">{data.gstin}</span>
+              {detailLoading ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 bg-gray-100 rounded w-2/3" />
+                  <div className="h-10 bg-gray-100 rounded" />
                 </div>
-                <div className="text-gray-500">Address</div>
-                <div className="text-gray-700 text-xs bg-gray-50 rounded p-2">{data.registeredAddress}</div>
-              </div>
+              ) : (
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">GSTIN</span>
+                    <span className="font-mono text-gray-700">{field(data.gstin)}</span>
+                  </div>
+                  <div className="text-gray-500">Address</div>
+                  <div className="text-gray-700 text-xs bg-gray-50 rounded p-2">{field(data.registeredAddress)}</div>
+                </div>
+              )}
             </div>
 
             <hr />
@@ -285,10 +328,7 @@ const VendorDetailPanel = ({ vendorId, onClose }: { vendorId: string; onClose: (
               </div>
             )}
           </div>
-          )
-        ) : (
-          <p className="text-sm text-gray-400 text-center py-10">Failed to load vendor details.</p>
-        )}
+          )}
       </div>
     </div>
   )
@@ -302,13 +342,34 @@ const VendorListTab = () => {
   const { data, isLoading } = useVendors({ page, limit, search: q || undefined })
   const deleteMut           = useDeleteVendor()
 
-  const [detailId, setDetailId] = useState<string | null>(null)
+  const [detailVendor, setDetailVendor] = useState<Vendor | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  const openDetail = (v: Vendor) => {
+    const id = vendorId(v)
+    if (!id) {
+      toast.error('Could not open vendor — refresh the page and try again')
+      return
+    }
+    setDetailVendor(v)
+  }
+
+  const vendorToDelete = deleteId ? data?.data.find((v) => vendorId(v) === deleteId) : null
+
+  const handleDelete = () => {
+    if (!deleteId) return
+    deleteMut.mutate(deleteId, {
+      onSuccess: () => {
+        setDeleteId(null)
+        if (detailVendor && vendorId(detailVendor) === deleteId) setDetailVendor(null)
+      },
+    })
+  }
 
   const columns: Column<Vendor>[] = [
     {
       header: 'Vendor', accessor: (r) => (
-        <button className="text-left hover:text-brand transition-colors" onClick={() => setDetailId(r.id)}>
+        <button type="button" className="text-left hover:text-brand transition-colors" onClick={() => openDetail(r)}>
           <p className="font-medium text-gray-800 text-sm">{r.vendorName}</p>
           <p className="text-xs text-gray-400">{r.contactPerson}</p>
         </button>
@@ -326,9 +387,24 @@ const VendorListTab = () => {
     {
       header: 'Actions', accessor: (r) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => setDetailId(r.id)}>View</Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={() => setDeleteId(r.id)}>Delete</Button>
+          <Button
+            type="button"
+            variant="ghost" size="sm"
+            className="h-7 text-xs px-2 text-brand hover:bg-brand/5"
+            title="View details"
+            onClick={(e) => { e.stopPropagation(); openDetail(r) }}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost" size="sm"
+            className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            title="Delete vendor"
+            onClick={(e) => { e.stopPropagation(); setDeleteId(vendorId(r) || null) }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ),
     },
@@ -342,21 +418,33 @@ const VendorListTab = () => {
 
       <DataTable
         columns={columns} data={data?.data ?? []} loading={isLoading}
-        keyExtractor={(r) => r.id}
+        keyExtractor={(r) => vendorId(r)}
         pagination={data?.meta ? { ...data.meta, totalPages: data.meta.totalPages } : undefined}
         onPageChange={setPage}
       />
 
-      {detailId && (
+      {detailVendor && (
         <>
-          <div className="fixed inset-0 z-30 bg-black/20" onClick={() => setDetailId(null)} />
-          <VendorDetailPanel vendorId={detailId} onClose={() => setDetailId(null)} />
+          <div className="fixed inset-0 z-30 bg-black/20" onClick={() => setDetailVendor(null)} />
+          <VendorDetailPanel
+            vendor={detailVendor}
+            onClose={() => setDetailVendor(null)}
+            onDelete={() => setDeleteId(vendorId(detailVendor))}
+          />
         </>
       )}
 
-      <ConfirmModal open={!!deleteId} onClose={() => setDeleteId(null)} title="Delete Vendor"
-        message="This will remove the vendor and unlink all associated inventory."
-        onConfirm={() => deleteMut.mutate(deleteId!, { onSuccess: () => setDeleteId(null) })}
+      <ConfirmModal
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete Vendor"
+        message={
+          vendorToDelete
+            ? `Delete "${vendorToDelete.vendorName}"? This will permanently remove the vendor and unlink all associated inventory.`
+            : 'This will permanently remove the vendor and unlink all associated inventory.'
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
         loading={deleteMut.isPending}
       />
     </>

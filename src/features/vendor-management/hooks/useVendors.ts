@@ -13,6 +13,7 @@ export const useVendorDetail = (id: string | null) =>
     queryKey: [QK.detail, id],
     queryFn:  () => api.getVendorDetail(id!).then((r) => r.data.data),
     enabled:  !!id,
+    retry:    false,
   })
 
 export const useVendorDropdown = () =>
@@ -37,7 +38,13 @@ export const useUpdateVendor = () => {
 export const useDeleteVendor = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: api.deleteVendor,
-    onSuccess: () => { toast.success('Vendor deleted'); qc.invalidateQueries({ queryKey: [QK.list] }) },
+    mutationFn: (id: string) => api.deleteVendor(id),
+    onSuccess: () => {
+      toast.success('Vendor deleted')
+      qc.invalidateQueries({ queryKey: [QK.list] })
+      qc.invalidateQueries({ queryKey: [QK.detail] })
+      qc.invalidateQueries({ queryKey: [QK.dropdown] })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete vendor'),
   })
 }
