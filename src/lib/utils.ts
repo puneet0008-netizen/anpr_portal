@@ -22,3 +22,24 @@ export const formatDateTime = (d: string | Date | null | undefined) => {
     hour: '2-digit', minute: '2-digit',
   }).format(date)
 }
+
+/** Use image URL from API as-is (handles relative paths + http→https). */
+export const resolveImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null
+
+  if (url.startsWith('/uploads/')) {
+    const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+    return apiBase ? `${apiBase}${url}` : url
+  }
+
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'http:' && typeof window !== 'undefined' && window.location.protocol === 'https:') {
+      parsed.protocol = 'https:'
+      return parsed.toString()
+    }
+    return url
+  } catch {
+    return url
+  }
+}

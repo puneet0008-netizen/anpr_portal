@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://anprbackend-production.up.railway.app/uploads/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

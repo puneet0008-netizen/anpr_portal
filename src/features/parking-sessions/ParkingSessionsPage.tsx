@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSessions, useActiveSessions, useRecordEntry, useRecordExit, useLookupByPlate } from './hooks/useParkingSessions'
 import { useDebounce } from '@/hooks/useDebounce'
-import { formatDateTime } from '@/lib/utils'
+import { formatDateTime, resolveImageUrl } from '@/lib/utils'
 import * as parkingApi from '@/api/parking.api'
 import type { ParkingSession } from '@/types'
 
@@ -25,15 +25,17 @@ const SessionInOutBadge = ({ session }: { session: ParkingSession }) =>
   )
 
 const EntryImagesCell = ({ session }: { session: ParkingSession }) => {
-  const plateUrl = session.entryPlateImageUrl
-  const carUrl   = session.entryCarImageUrl
+  const plateUrl = resolveImageUrl(session.entryPlateImageUrl)
+  const carUrl   = resolveImageUrl(session.entryCarImageUrl)
   if (!plateUrl && !carUrl) return <span className="text-xs text-gray-400">—</span>
 
-  const thumb = (url: string | null | undefined, label: string) => url ? (
+  const thumb = (url: string | null, label: string) => url ? (
     <a href={url} target="_blank" rel="noopener noreferrer" className="group block" title={`View ${label}`}>
       <img
         src={url}
         alt={label}
+        referrerPolicy="no-referrer"
+        loading="lazy"
         className="h-10 w-14 rounded border border-gray-200 object-cover group-hover:ring-2 group-hover:ring-brand/40"
       />
       <span className="text-[10px] text-gray-400 block text-center mt-0.5">{label}</span>
