@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { LogIn, LogOut, Clock, Car, Search, RefreshCw, User, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -37,12 +37,13 @@ const EntryModal = ({ open, onClose }: { open: boolean; onClose: () => void }) =
     queryKey: ['parking-site-list'],
     queryFn:  () => parkingApi.getParkingList().then(r => r.data.data),
     staleTime: 60_000,
-    // Auto-select if only one site
-    select: (data) => {
-      if (data.length === 1 && !siteId) setSiteId(data[0].id)
-      return data
-    },
   })
+
+  useEffect(() => {
+    if (siteList?.length === 1 && !siteId) {
+      setSiteId(siteList[0].id)
+    }
+  }, [siteList, siteId])
 
   const hasSites = (siteList?.length ?? 0) > 0
 
