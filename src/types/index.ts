@@ -328,6 +328,10 @@ export interface ParkingSession {
   durationFormatted?: string
   fee: number
   status: SessionStatus
+  entryPlateImageUrl?: string | null
+  entryCarImageUrl?: string | null
+  exitPlateImageUrl?: string | null
+  exitCarImageUrl?: string | null
   createdAt: string
 }
 

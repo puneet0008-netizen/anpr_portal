@@ -24,6 +24,35 @@ const SessionInOutBadge = ({ session }: { session: ParkingSession }) =>
     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">OUT</span>
   )
 
+const EntryImagesCell = ({ session }: { session: ParkingSession }) => {
+  const plateUrl = session.entryPlateImageUrl
+  const carUrl   = session.entryCarImageUrl
+  if (!plateUrl && !carUrl) return <span className="text-xs text-gray-400">—</span>
+
+  const thumb = (url: string | null | undefined, label: string) => url ? (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="group block" title={`View ${label}`}>
+      <img
+        src={url}
+        alt={label}
+        className="h-10 w-14 rounded border border-gray-200 object-cover group-hover:ring-2 group-hover:ring-brand/40"
+      />
+      <span className="text-[10px] text-gray-400 block text-center mt-0.5">{label}</span>
+    </a>
+  ) : (
+    <div className="text-center">
+      <div className="h-10 w-14 rounded border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-300">—</div>
+      <span className="text-[10px] text-gray-400 block mt-0.5">{label}</span>
+    </div>
+  )
+
+  return (
+    <div className="flex items-start gap-2">
+      {thumb(plateUrl, 'Plate')}
+      {thumb(carUrl, 'Car')}
+    </div>
+  )
+}
+
 // ─── Entry modal ──────────────────────────────────────────────────────────────
 const EntryModal = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const [plate, setPlate]   = useState('')
@@ -263,6 +292,10 @@ const ActiveSessionsTable = () => {
       accessor: (r) => <span className="text-xs text-gray-600">{formatDateTime(r.entryTime)}</span>,
     },
     {
+      header: 'Entry Images',
+      accessor: (r) => <EntryImagesCell session={r} />,
+    },
+    {
       header: 'Duration (so far)',
       accessor: (r) => (
         <span className="text-xs font-mono bg-orange-50 text-orange-700 px-2 py-0.5 rounded">
@@ -333,6 +366,10 @@ const AllSessionsTable = () => {
     {
       header: 'Entry',
       accessor: (r) => <span className="text-xs text-gray-600">{formatDateTime(r.entryTime)}</span>,
+    },
+    {
+      header: 'Entry Images',
+      accessor: (r) => <EntryImagesCell session={r} />,
     },
     {
       header: 'Exit',
