@@ -25,21 +25,27 @@ const SessionInOutBadge = ({ session }: { session: ParkingSession }) =>
   )
 
 const EntryImagesCell = ({ session }: { session: ParkingSession }) => {
+  const [preview, setPreview] = useState<{ url: string; label: string } | null>(null)
   const plateUrl = resolveImageUrl(session.entryPlateImageUrl)
   const carUrl   = resolveImageUrl(session.entryCarImageUrl)
   if (!plateUrl && !carUrl) return <span className="text-xs text-gray-400">—</span>
 
   const thumb = (url: string | null, label: string) => url ? (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="group block" title={`View ${label}`}>
+    <button
+      type="button"
+      onClick={() => setPreview({ url, label })}
+      className="group block text-left"
+      title={`View ${label}`}
+    >
       <img
         src={url}
         alt={label}
         referrerPolicy="no-referrer"
         loading="lazy"
-        className="h-10 w-14 rounded border border-gray-200 object-cover group-hover:ring-2 group-hover:ring-brand/40"
+        className="h-10 w-14 rounded border border-gray-200 object-cover cursor-pointer group-hover:ring-2 group-hover:ring-brand/40"
       />
       <span className="text-[10px] text-gray-400 block text-center mt-0.5">{label}</span>
-    </a>
+    </button>
   ) : (
     <div className="text-center">
       <div className="h-10 w-14 rounded border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] text-gray-300">—</div>
@@ -48,10 +54,32 @@ const EntryImagesCell = ({ session }: { session: ParkingSession }) => {
   )
 
   return (
-    <div className="flex items-start gap-2">
-      {thumb(plateUrl, 'Plate')}
-      {thumb(carUrl, 'Car')}
-    </div>
+    <>
+      <div className="flex items-start gap-2">
+        {thumb(plateUrl, 'Plate')}
+        {thumb(carUrl, 'Car')}
+      </div>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent size="xl" className="p-0 overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              Entry {preview?.label} — {session.numberPlate}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-6 flex justify-center bg-gray-50">
+            {preview && (
+              <img
+                src={preview.url}
+                alt={preview.label}
+                referrerPolicy="no-referrer"
+                className="max-w-full max-h-[75vh] rounded-lg object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
