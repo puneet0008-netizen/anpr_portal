@@ -102,12 +102,17 @@ const RequestsTable = ({ status }: { status?: RequestStatus }) => {
     { header: 'Vehicle', accessor: (r) => <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded uppercase">{r.number_plate ?? r.current_value}</span> },
     { header: 'Type',    accessor: (r) => <span className="text-xs">{reqTypeLabel(r.request_type)}</span> },
     {
-      header: 'Change',
+      header: 'Current',
       accessor: (r) => (
-        <div className="text-xs">
-          <span className="text-gray-400 line-through mr-1">{r.current_value}</span>
-          <span className="text-brand font-medium">→ {r.requested_value}</span>
-        </div>
+        <span className="font-mono text-xs uppercase text-gray-600">{r.current_value || '—'}</span>
+      ),
+    },
+    {
+      header: 'Requested Value',
+      accessor: (r) => (
+        <span className="font-mono text-xs uppercase text-brand font-semibold">
+          {r.requested_value || '—'}
+        </span>
       ),
     },
     { header: 'Status',  accessor: (r) => <StatusBadge status={r.status} /> },

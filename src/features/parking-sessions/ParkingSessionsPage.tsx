@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
-import { LogIn, LogOut, Clock, Car, Search, RefreshCw, User, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { LogIn, LogOut, Clock, Car, Search, RefreshCw, User, AlertTriangle, CheckCircle2, Download, Trash2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { PageHeader }  from '@/components/shared/PageHeader'
 import { DataTable, type Column } from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
@@ -9,10 +10,12 @@ import { Input }  from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useSessions, useActiveSessions, useRecordEntry, useRecordExit, useLookupByPlate } from './hooks/useParkingSessions'
+import { useSessions, useActiveSessions, useRecordEntry, useRecordExit, useLookupByPlate, useDeleteSession } from './hooks/useParkingSessions'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, resolveImageUrl } from '@/lib/utils'
+import { exportParkingSessionsZip, fetchAllSessions } from '@/lib/exportParkingSessions'
 import * as parkingApi from '@/api/parking.api'
+import * as parkingSessionsApi from '@/api/parking-sessions.api'
 import type { ParkingSession } from '@/types'
 
 const isSessionIn = (s: ParkingSession) => s.status === 'active' || !s.exitTime
@@ -77,6 +80,64 @@ const EntryImagesCell = ({ session }: { session: ParkingSession }) => {
               />
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// ─── Delete session ───────────────────────────────────────────────────────────
+const DeleteSessionButton = ({ session }: { session: ParkingSession }) => {
+  const [open, setOpen] = useState(false)
+  const deleteMut = useDeleteSession()
+
+  const handleDelete = () => {
+    deleteMut.mutate(session.id, {
+      onSuccess: () => setOpen(false),
+    })
+  }
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs px-2 text-red-600 border-red-200 hover:bg-red-50"
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 className="h-3 w-3 mr-1" /> Delete
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete parking session?</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-3 text-sm">
+            <p className="text-gray-600">
+              This will permanently remove the session for{' '}
+              <span className="font-mono font-bold uppercase text-gray-900">{session.numberPlate}</span>.
+            </p>
+            <p className="text-xs text-gray-400">
+              Entry: {formatDateTime(session.entryTime)}
+              {session.status === 'active' || !session.exitTime
+                ? ' · Active session — site occupancy will be updated.'
+                : ''}
+            </p>
+          </div>
+          <DialogFooter className="px-6 pb-4 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={deleteMut.isPending}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteMut.isPending}
+              onClick={handleDelete}
+            >
+              {deleteMut.isPending ? 'Deleting…' : 'Delete session'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
@@ -340,13 +401,16 @@ const ActiveSessionsTable = () => {
     {
       header: 'Action',
       accessor: (r) => (
-        <Button
-          size="sm"
-          className="h-7 text-xs px-2 bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => { setExitSession(r); setExitOpen(true) }}
-        >
-          <LogOut className="h-3 w-3 mr-1" /> Exit
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 text-xs px-2 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => { setExitSession(r); setExitOpen(true) }}
+          >
+            <LogOut className="h-3 w-3 mr-1" /> Exit
+          </Button>
+          <DeleteSessionButton session={r} />
+        </div>
       ),
     },
   ]
@@ -368,9 +432,17 @@ const ActiveSessionsTable = () => {
 }
 
 // ─── All sessions table ───────────────────────────────────────────────────────
-const AllSessionsTable = () => {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('')
+const AllSessionsTable = ({
+  search,
+  setSearch,
+  status,
+  setStatus,
+}: {
+  search: string
+  setSearch: (v: string) => void
+  status: string
+  setStatus: (v: string) => void
+}) => {
   const { data, isLoading, refetch, isFetching } = useSessions({
     numberPlate: search || undefined,
     status: status || undefined,
@@ -417,6 +489,10 @@ const AllSessionsTable = () => {
       header: 'Status',
       accessor: (r) => <SessionInOutBadge session={r} />,
     },
+    {
+      header: 'Action',
+      accessor: (r) => <DeleteSessionButton session={r} />,
+    },
   ]
 
   return (
@@ -460,12 +536,48 @@ const AllSessionsTable = () => {
 const ParkingSessionsPage = () => {
   const [entryOpen, setEntryOpen] = useState(false)
   const [exitOpen,  setExitOpen]  = useState(false)
+  const [activeTab, setActiveTab] = useState('active')
+  const [allSearch, setAllSearch] = useState('')
+  const [allStatus, setAllStatus] = useState('')
+  const [exporting, setExporting] = useState(false)
   const qc = useQueryClient()
   const isRefreshing = useIsFetching({ queryKey: ['parking-sessions'] }) > 0
 
   const handleRefresh = () => {
     qc.invalidateQueries({ queryKey: ['parking-sessions'] })
   }
+
+  const handleDownload = useCallback(async () => {
+    setExporting(true)
+    const toastId = toast.loading('Preparing export…')
+    try {
+      let sessions
+      let label: string
+
+      if (activeTab === 'active') {
+        const res = await parkingSessionsApi.getActiveSessions()
+        sessions = res.data.data
+        label = 'active'
+      } else {
+        sessions = await fetchAllSessions({
+          numberPlate: allSearch || undefined,
+          status: allStatus || undefined,
+        })
+        label = allSearch ? `filtered-${allSearch}` : allStatus ? allStatus : 'all'
+      }
+
+      await exportParkingSessionsZip(sessions, label, (msg) => {
+        toast.loading(msg, { id: toastId })
+      })
+
+      toast.success('Download started — ZIP contains Excel + images folder', { id: toastId })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Export failed'
+      toast.error(message, { id: toastId })
+    } finally {
+      setExporting(false)
+    }
+  }, [activeTab, allSearch, allStatus])
 
   return (
     <div>
@@ -474,6 +586,16 @@ const ParkingSessionsPage = () => {
         subtitle="Track vehicle entry and exit times with duration"
         action={
           <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void handleDownload()}
+              disabled={exporting || isRefreshing}
+            >
+              <Download className={`h-4 w-4 mr-1.5 ${exporting ? 'animate-pulse' : ''}`} />
+              {exporting ? 'Exporting…' : 'Download Excel'}
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -502,7 +624,7 @@ const ParkingSessionsPage = () => {
         }
       />
 
-      <Tabs defaultValue="active">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="active">
             <Car className="h-3.5 w-3.5 mr-1.5" /> Currently Parked
@@ -512,7 +634,14 @@ const ParkingSessionsPage = () => {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="active"><ActiveSessionsTable /></TabsContent>
-        <TabsContent value="all"><AllSessionsTable /></TabsContent>
+        <TabsContent value="all">
+          <AllSessionsTable
+            search={allSearch}
+            setSearch={setAllSearch}
+            status={allStatus}
+            setStatus={setAllStatus}
+          />
+        </TabsContent>
       </Tabs>
 
       <EntryModal open={entryOpen} onClose={() => setEntryOpen(false)} />

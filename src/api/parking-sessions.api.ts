@@ -24,6 +24,9 @@ export const recordEntry     = (d: RecordEntryDto) =>
 export const recordExit      = (d: RecordExitDto) =>
   api.post<{ data: ParkingSession; success: boolean }>('/sessions/exit', d)
 
+export const deleteSession   = (id: string) =>
+  api.delete<{ success: boolean; message: string }>(`/sessions/${id}`)
+
 export type PlateLookupResult = {
   plate: string
   isAlreadyParked: boolean

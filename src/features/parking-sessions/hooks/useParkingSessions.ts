@@ -39,6 +39,18 @@ export const useRecordEntry = () => {
   })
 }
 
+export const useDeleteSession = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deleteSession(id),
+    onSuccess: () => {
+      toast.success('Parking session deleted')
+      qc.invalidateQueries({ queryKey: [QK] })
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Delete failed'),
+  })
+}
+
 export const useRecordExit = () => {
   const qc = useQueryClient()
   return useMutation({
