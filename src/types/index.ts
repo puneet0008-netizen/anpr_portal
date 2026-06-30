@@ -310,7 +310,7 @@ export interface Visitor {
 }
 
 // ─── Parking Sessions ─────────────────────────────────────────────────────────
-export type SessionStatus = 'active' | 'completed'
+export type SessionStatus = 'IN' | 'OUT' | 'active' | 'completed'
 
 export interface ParkingSession {
   id: string

@@ -18,7 +18,7 @@ import * as parkingApi from '@/api/parking.api'
 import * as parkingSessionsApi from '@/api/parking-sessions.api'
 import type { ParkingSession } from '@/types'
 
-const isSessionIn = (s: ParkingSession) => s.status === 'active' || !s.exitTime
+const isSessionIn = (s: ParkingSession) => s.status === 'IN' || s.status === 'active'
 
 const SessionInOutBadge = ({ session }: { session: ParkingSession }) =>
   isSessionIn(session) ? (
@@ -120,7 +120,7 @@ const DeleteSessionButton = ({ session }: { session: ParkingSession }) => {
             </p>
             <p className="text-xs text-gray-400">
               Entry: {formatDateTime(session.entryTime)}
-              {session.status === 'active' || !session.exitTime
+              {isSessionIn(session)
                 ? ' · Active session — site occupancy will be updated.'
                 : ''}
             </p>
